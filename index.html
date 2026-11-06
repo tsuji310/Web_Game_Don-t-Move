@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1ミリも動くな！ Ver.2.0</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: #090d16;
+            color: #ffffff;
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 800px;
+            max-height: 600px;
+            background: #0f172a;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid #334155;
+        }
+
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* UI overlay */
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 14px 18px;
+        }
+
+        .header-hud {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .hud-group {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .hud-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: #94a3b8;
+            letter-spacing: 1px;
+        }
+
+        .hud-value {
+            font-size: 18px;
+            font-weight: 900;
+            font-family: monospace;
+            color: #f8fafc;
+        }
+
+        #dist-val { color: #f87171; }
+        #score-val { color: #60a5fa; }
+        #time-val { color: #34d399; }
+        #near-val { color: #fbbf24; }
+        #move-time-val { color: #38bdf8; transition: color 0.2s; }
+        #move-time-val.warning { color: #ef4444; animation: pulse-text 0.3s infinite alternate; }
+
+        @keyframes pulse-text {
+            from { opacity: 0.5; }
+            to { opacity: 1.0; }
+        }
+
+        .btn-pause {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .btn-pause:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Modals */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(11, 15, 25, 0.92);
+            backdrop-filter: blur(10px);
+            z-index: 30;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+            text-align: center;
+            pointer-events: auto;
+            transition: opacity 0.2s ease;
+        }
+
+        .modal-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .title-text {
+            font-size: 36px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            margin-bottom: 6px;
+            background: linear-gradient(135deg, #f87171 0%, #fbbf24 50%, #60a5fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle-text {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 18px;
+        }
+
+        .info-card {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 14px 20px;
+            margin-bottom: 18px;
+            text-align: left;
+            max-width: 480px;
+            width: 100%;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+
+        .key-badge {
+            background: #334155;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid #475569;
+            color: #f8fafc;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            width: 100%;
+            max-width: 480px;
+            margin-bottom: 18px;
+        }
+
+        .stat-box {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #334155;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .stat-rank {
+            font-size: 52px;
+            font-weight: 900;
+            line-height: 1;
+            margin: 6px 0;
+        }
+
+        .rank-S { color: #f59e0b; text-shadow: 0 0 15px rgba(245, 158, 11, 0.5); }
+        .rank-A { color: #ec4899; }
+        .rank-B { color: #a855f7; }
+        .rank-C { color: #3b82f6; }
+        .rank-D { color: #64748b; }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 8px 16px rgba(37, 99, 235, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-secondary {
+            background: #334155;
+            box-shadow: none;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+            box-shadow: none;
+        }
+
+        .trophy-badge {
+            display: inline-block;
+            background: rgba(251, 191, 36, 0.15);
+            border: 1px solid #fbbf24;
+            color: #fbbf24;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin: 3px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI HUD -->
+    <div class="ui-layer">
+        <div class="header-hud">
+            <div class="hud-group">
+                <span class="hud-label">TIME</span>
+                <span class="hud-value" id="time-val">0.0s</span>
+            </div>
+            <div class="hud-group">
+                <span class="hud-label">CONTINUOUS MOVE</span>
+                <span class="hud-value" id="move-time-val">0.0s</span>
+            </div>
+            <div class="hud-group">
+                <span class="hud-label">MOVE DIST</span>
+                <span class="hud-value" id="dist-val">0.0 px</span>
+            </div>
+            <div class="hud-group">
+                <span class="hud-label">NEAR MISS</span>
+                <span class="hud-value" id="near-val">0</span>
+            </div>
+            <div class="hud-group">
+                <span class="hud-label">SCORE</span>
+                <span class="hud-value" id="score-val">0</span>
+            </div>
+            <button class="btn-pause" id="pause-btn">一時停止 (ESC)</button>
+        </div>
+    </div>
+
+    <!-- Title Modal -->
+    <div id="title-modal" class="modal-overlay">
+        <h1 class="title-text">1ミリも動くな！ Ver.2.0</h1>
+        <p class="subtitle-text">最小移動で引きつけてかわせ！</p>
+        
+        <div class="info-card">
+            ・操作方法: <span class="key-badge">W A S D</span> / <span class="key-badge">↑ ← ↓ →</span><br>
+            ・<b>【警告】3秒以上連続で移動し続けると即ゲームオーバー！</b><br>
+            ・<b>攻撃予兆（赤い線）</b>を見極めて弾を完全回避！<br>
+            ・弾を引きつけてギリギリで回避すると<b>ニアミスボーナス（最大+500pt）</b>！<br>
+            ・最小移動で<b>Sランク</b>を目指せ！
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="hud-label">HIGH SCORE</div>
+                <div class="hud-value" id="best-score" style="font-size: 15px; margin-top: 4px;">0</div>
+            </div>
+            <div class="stat-box">
+                <div class="hud-label">MIN DISTANCE</div>
+                <div class="hud-value" id="best-dist" style="font-size: 15px; margin-top: 4px;">---</div>
+            </div>
+            <div class="stat-box">
+                <div class="hud-label">BEST RANK</div>
+                <div class="hud-value" id="best-rank" style="font-size: 15px; margin-top: 4px;">---</div>
+            </div>
+        </div>
+
+        <button class="btn" id="start-btn">ゲーム開始</button>
+    </div>
+
+    <!-- Result Modal -->
+    <div id="result-modal" class="modal-overlay hidden">
+        <h1 class="title-text" id="result-title">生き残った！</h1>
+        <p class="subtitle-text" id="result-msg">完璧な最小移動で回避達成！</p>
+
+        <div class="stat-rank" id="result-rank">S</div>
+        <div id="trophy-container" style="margin-bottom: 12px;"></div>
+
+        <div class="stats-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr; max-width: 520px;">
+            <div class="stat-box">
+                <div class="hud-label">SURVIVAL</div>
+                <div class="hud-value" id="res-time-score" style="font-size:14px; color:#34d399;">+0</div>
+            </div>
+            <div class="stat-box">
+                <div class="hud-label">NEAR MISS</div>
+                <div class="hud-value" id="res-near-score" style="font-size:14px; color:#fbbf24;">+0</div>
+            </div>
+            <div class="stat-box">
+                <div class="hud-label">SAVING BONUS</div>
+                <div class="hud-value" id="res-save-score" style="font-size:14px; color:#60a5fa;">+0</div>
+            </div>
+            <div class="stat-box">
+                <div class="hud-label">PENALTY</div>
+                <div class="hud-value" id="res-penalty" style="font-size:14px; color:#f87171;">-0</div>
+            </div>
+        </div>
+
+        <div class="info-card" style="text-align: center; margin-bottom: 14px; padding: 10px;">
+            <div class="hud-label">TOTAL MOVE: <span id="res-total-dist" style="color:#f87171; font-weight:bold;">0.0 px</span></div>
+            <div style="font-size: 30px; font-weight: 900; color: #60a5fa; font-family: monospace;" id="res-final-score">0</div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn" id="retry-btn">もう一度</button>
+            <button class="btn btn-secondary" id="to-title-btn">タイトルへ</button>
+        </div>
+    </div>
+
+    <!-- Pause Modal -->
+    <div id="pause-modal" class="modal-overlay hidden">
+        <h1 class="title-text" style="background: #f8fafc; -webkit-background-clip: text; -webkit-text-fill-color: transparent;">PAUSE</h1>
+        <p class="subtitle-text">一時停止中</p>
+        <div class="btn-group">
+            <button class="btn" id="resume-btn">再開</button>
+            <button class="btn btn-secondary" id="pause-title-btn">タイトルへ</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const wrapper = document.getElementById('game-wrapper');
+
+    // UI Elements
+    const timeVal = document.getElementById('time-val');
+    const moveTimeVal = document.getElementById('move-time-val');
+    const distVal = document.getElementById('dist-val');
+    const nearVal = document.getElementById('near-val');
+    const scoreVal = document.getElementById('score-val');
+    const bestScoreEl = document.getElementById('best-score');
+    const bestDistEl = document.getElementById('best-dist');
+    const bestRankEl = document.getElementById('best-rank');
+    const titleModal = document.getElementById('title-modal');
+    const resultModal = document.getElementById('result-modal');
+    const pauseModal = document.getElementById('pause-modal');
+    const resultTitle = document.getElementById('result-title');
+    const resultMsg = document.getElementById('result-msg');
+    const resultRank = document.getElementById('result-rank');
+    const trophyContainer = document.getElementById('trophy-container');
+
+    const resTimeScore = document.getElementById('res-time-score');
+    const resNearScore = document.getElementById('res-near-score');
+    const resSaveScore = document.getElementById('res-save-score');
+    const resPenalty = document.getElementById('res-penalty');
+    const resTotalDist = document.getElementById('res-total-dist');
+    const resFinalScore = document.getElementById('res-final-score');
+
+    const startBtn = document.getElementById('start-btn');
+    const retryBtn = document.getElementById('retry-btn');
+    const toTitleBtn = document.getElementById('to-title-btn');
+    const pauseBtn = document.getElementById('pause-btn');
+    const resumeBtn = document.getElementById('resume-btn');
+    const pauseTitleBtn = document.getElementById('pause-title-btn');
+
+    // Web Audio API
+    let audioCtx = null;
+    function initAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    function playSound(type) {
+        if (!audioCtx) return;
+        try {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+
+            if (type === 'start') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            } else if (type === 'near') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, now);
+                osc.frequency.exponentialRampToValueAtTime(1760, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'hit') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.linearRampToValueAtTime(30, now + 0.3);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'clear') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.setValueAtTime(659.25, now + 0.1);
+                osc.frequency.setValueAtTime(783.99, now + 0.2);
+                osc.frequency.setValueAtTime(1046.50, now + 0.3);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
+                osc.start(now); osc.stop(now + 0.5);
+            } else if (type === 'warn') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(600, now);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                osc.start(now); osc.stop(now + 0.08);
+            }
+        } catch(e){}
+    }
+
+    // Pseudo Random Generator
+    let seed = 12345;
+    function seededRandom() {
+        seed = (seed * 9301 + 49297) % 233280;
+        return seed / 233280;
+    }
+
+    // Core Game Variables
+    let gameState = 'TITLE';
+    let width = 800, height = 600;
+    let survivalTime = 0;
+    let totalDistance = 0;
+    let nearMissCount = 0;
+    let nearMissScoreTotal = 0;
+    let continuousMoveTime = 0;
+    let keys = {};
+
+    // Floating Texts
+    let floatingTexts = [];
+
+    // Player Object
+    const player = {
+        x: 400,
+        y: 300,
+        radius: 10,
+        speed: 170,
+        hitRadius: 6
+    };
+
+    // Bullets & Warnings
+    let bullets = [];
+    let warnings = [];
+    let spawnScript = [];
+
+    // LocalStorage Records
+    let highScore = parseInt(localStorage.getItem('ver2_high_score') || '0');
+    let minDistance = localStorage.getItem('ver2_min_dist') !== null ? parseFloat(localStorage.getItem('ver2_min_dist')) : null;
+    let bestRank = localStorage.getItem('ver2_best_rank') || '---';
+
+    function updateRecordsUI() {
+        bestScoreEl.innerText = highScore;
+        bestDistEl.innerText = minDistance !== null ? minDistance.toFixed(1) + ' px' : '---';
+        bestRankEl.innerText = bestRank;
+    }
+    updateRecordsUI();
+
+    function resize() {
+        width = wrapper.clientWidth;
+        height = wrapper.clientHeight;
+        canvas.width = width;
+        canvas.height = height;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    window.addEventListener('keydown', (e) => {
+        keys[e.code] = true;
+        if (e.code === 'Escape') togglePause();
+    });
+    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+    function togglePause() {
+        if (gameState === 'PLAYING') {
+            gameState = 'PAUSED';
+            pauseModal.classList.remove('hidden');
+        } else if (gameState === 'PAUSED') {
+            gameState = 'PLAYING';
+            pauseModal.classList.add('hidden');
+            lastTime = performance.now();
+        }
+    }
+
+    function generateSpawnScript() {
+        spawnScript = [];
+        seed = 42;
+
+        for (let t = 0.5; t < 60; t += (t < 15 ? 1.2 : (t < 30 ? 0.7 : (t < 45 ? 0.45 : 0.3)))) {
+            let type = 'normal';
+            if (t >= 30) {
+                const r = seededRandom();
+                if (r < 0.25) type = 'huge';
+                else if (r < 0.6) type = 'sniper';
+                else if (r < 0.8) type = 'fast';
+            } else if (t >= 15) {
+                if (seededRandom() < 0.45) type = 'fast';
+            }
+
+            let sx, sy;
+            const side = Math.floor(seededRandom() * 4);
+            const margin = 20;
+            if (side === 0) { sx = seededRandom() * width; sy = -margin; }
+            else if (side === 1) { sx = width + margin; sy = seededRandom() * height; }
+            else if (side === 2) { sx = seededRandom() * width; sy = height + margin; }
+            else { sx = -margin; sy = seededRandom() * height; }
+
+            spawnScript.push({
+                time: t,
+                type: type,
+                sx: sx,
+                sy: sy,
+                warnDuration: 0.7
+            });
+        }
+    }
+
+    function createWarning(scriptItem) {
+        let targetX = player.x;
+        let targetY = player.y;
+
+        if (scriptItem.type !== 'sniper') {
+            targetX += (seededRandom() - 0.5) * 120;
+            targetY += (seededRandom() - 0.5) * 120;
+        }
+
+        const angle = Math.atan2(targetY - scriptItem.sy, targetX - scriptItem.sx);
+
+        warnings.push({
+            sx: scriptItem.sx,
+            sy: scriptItem.sy,
+            angle: angle,
+            timer: scriptItem.warnDuration,
+            maxTimer: scriptItem.warnDuration,
+            type: scriptItem.type
+        });
+    }
+
+    function spawnBulletFromWarning(w) {
+        let radius = 7, speed = 140, color = '#f87171';
+
+        if (w.type === 'fast') {
+            radius = 5; speed = 280; color = '#fbbf24';
+        } else if (w.type === 'huge') {
+            radius = 22; speed = 90; color = '#c084fc';
+        } else if (w.type === 'sniper') {
+            radius = 6; speed = 230; color = '#38bdf8';
+        }
+
+        bullets.push({
+            id: Math.random(),
+            x: w.sx,
+            y: w.sy,
+            vx: Math.cos(w.angle) * speed,
+            vy: Math.sin(w.angle) * speed,
+            radius: radius,
+            hitRadius: radius * 0.7,
+            color: color,
+            minDistanceToPlayer: 9999,
+            hasClosePassed: false,
+            nearMissDone: false
+        });
+    }
+
+    function startGame() {
+        initAudio();
+        playSound('start');
+
+        player.x = width / 2;
+        player.y = height / 2;
+        survivalTime = 0;
+        totalDistance = 0;
+        nearMissCount = 0;
+        nearMissScoreTotal = 0;
+        continuousMoveTime = 0;
+        bullets = [];
+        warnings = [];
+        floatingTexts = [];
+
+        generateSpawnScript();
+
+        gameState = 'PLAYING';
+        titleModal.classList.add('hidden');
+        resultModal.classList.add('hidden');
+        pauseModal.classList.add('hidden');
+
+        lastTime = performance.now();
+    }
+
+    function addFloatingText(text, x, y, color = '#fbbf24') {
+        floatingTexts.push({
+            text: text,
+            x: x,
+            y: y,
+            alpha: 1.0,
+            color: color
+        });
+    }
+
+    function update(dt) {
+        if (gameState !== 'PLAYING') return;
+
+        survivalTime += dt;
+
+        for (let i = spawnScript.length - 1; i >= 0; i--) {
+            if (survivalTime >= spawnScript[i].time) {
+                createWarning(spawnScript[i]);
+                spawnScript.splice(i, 1);
+            }
+        }
+
+        for (let i = warnings.length - 1; i >= 0; i--) {
+            const w = warnings[i];
+            w.timer -= dt;
+            if (w.timer <= 0) {
+                spawnBulletFromWarning(w);
+                warnings.splice(i, 1);
+            }
+        }
+
+        let moveX = 0, moveY = 0;
+        if (keys['KeyW'] || keys['ArrowUp']) moveY -= 1;
+        if (keys['KeyS'] || keys['ArrowDown']) moveY += 1;
+        if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
+        if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+
+        if (moveX !== 0 && moveY !== 0) {
+            moveX *= 0.7071;
+            moveY *= 0.7071;
+        }
+
+        const isMoving = (moveX !== 0 || moveY !== 0);
+
+        if (isMoving) {
+            const oldX = player.x;
+            const oldY = player.y;
+
+            player.x = Math.max(player.radius, Math.min(width - player.radius, player.x + moveX * player.speed * dt));
+            player.y = Math.max(player.radius, Math.min(height - player.radius, player.y + moveY * player.speed * dt));
+
+            const dist = Math.hypot(player.x - oldX, player.y - oldY);
+            totalDistance += dist;
+
+            // 連続移動時間のカウントアップ
+            continuousMoveTime += dt;
+
+            // 警告効果音（2秒経過時点で警告開始）
+            if (continuousMoveTime >= 2.0 && Math.floor(continuousMoveTime * 5) % 2 === 0) {
+                playSound('warn');
+            }
+
+            // 【3秒以上連続移動で即GAMEOVER】仕様
+            if (continuousMoveTime >= 3.0) {
+                gameOver(false, '連続で3秒以上移動したためルール違反！');
+                return;
+            }
+        } else {
+            // 移動を止めると連続移動時間がリセット
+            continuousMoveTime = 0;
+        }
+
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const b = bullets[i];
+            b.x += b.vx * dt;
+            b.y += b.vy * dt;
+
+            const centerDist = Math.hypot(b.x - player.x, b.y - player.y);
+            const edgeDist = centerDist - (b.hitRadius + player.hitRadius);
+
+            if (edgeDist <= 0) {
+                gameOver(false);
+                return;
+            }
+
+            if (edgeDist < b.minDistanceToPlayer) {
+                b.minDistanceToPlayer = edgeDist;
+                if (edgeDist <= 30) {
+                    b.hasClosePassed = true;
+                }
+            } else if (b.hasClosePassed && !b.nearMissDone && edgeDist > b.minDistanceToPlayer + 5) {
+                b.nearMissDone = true;
+                nearMissCount++;
+
+                let bonus = 150;
+                let label = 'CLOSE! +150';
+                if (b.minDistanceToPlayer <= 10) {
+                    bonus = 500; label = 'NICE! +500';
+                } else if (b.minDistanceToPlayer <= 20) {
+                    bonus = 300; label = 'GREAT! +300';
+                }
+
+                nearMissScoreTotal += bonus;
+                playSound('near');
+                addFloatingText(label, player.x, player.y - 15);
+            }
+
+            if (b.x < -60 || b.x > width + 60 || b.y < -60 || b.y > height + 60) {
+                bullets.splice(i, 1);
+            }
+        }
+
+        for (let i = floatingTexts.length - 1; i >= 0; i--) {
+            const ft = floatingTexts[i];
+            ft.y -= 25 * dt;
+            ft.alpha -= 1.2 * dt;
+            if (ft.alpha <= 0) floatingTexts.splice(i, 1);
+        }
+
+        timeVal.innerText = survivalTime.toFixed(1) + 's';
+        distVal.innerText = totalDistance.toFixed(1) + ' px';
+        nearVal.innerText = nearMissCount;
+        moveTimeVal.innerText = continuousMoveTime.toFixed(1) + 's';
+
+        if (continuousMoveTime >= 2.0) {
+            moveTimeVal.classList.add('warning');
+        } else {
+            moveTimeVal.classList.remove('warning');
+        }
+
+        const liveScore = Math.floor(survivalTime * 100);
+        const penalty = Math.floor(totalDistance);
+        const currentScore = Math.max(0, liveScore + nearMissScoreTotal - penalty);
+        scoreVal.innerText = currentScore;
+
+        if (survivalTime >= 60.0) {
+            gameOver(true);
+        }
+    }
+
+    function calculateSaveBonus(dist) {
+        if (dist === 0) return 5000;
+        if (dist <= 50) return 3000;
+        if (dist <= 100) return 2000;
+        if (dist <= 200) return 1000;
+        if (dist <= 400) return 500;
+        return 0;
+    }
+
+    function gameOver(isClear, customReason = null) {
+        gameState = 'RESULT';
+        playSound(isClear ? 'clear' : 'hit');
+
+        const liveScore = Math.floor(survivalTime * 100);
+        const penalty = Math.floor(totalDistance);
+        const saveBonus = isClear ? calculateSaveBonus(totalDistance) : 0;
+        const finalScore = Math.max(0, liveScore + nearMissScoreTotal + saveBonus - penalty);
+
+        let rank = 'D', rankClass = 'rank-D';
+        if (finalScore >= 12000) { rank = 'S'; rankClass = 'rank-S'; }
+        else if (finalScore >= 9000) { rank = 'A'; rankClass = 'rank-A'; }
+        else if (finalScore >= 6000) { rank = 'B'; rankClass = 'rank-B'; }
+        else if (finalScore >= 3000) { rank = 'C'; rankClass = 'rank-C'; }
+
+        let trophies = [];
+        if (totalDistance === 0 && isClear) trophies.push('🏆 称号: 石像');
+        else if (totalDistance <= 50 && isClear) trophies.push('🎖 称号: 最小限の努力');
+        if (nearMissCount >= 10) trophies.push('⚡ 称号: 紙一重');
+        if (isClear && nearMissCount === 0 && totalDistance === 0) trophies.push('👑 称号: 完全回避');
+
+        if (finalScore > highScore) {
+            highScore = finalScore;
+            localStorage.setItem('ver2_high_score', highScore);
+        }
+        if (isClear && (minDistance === null || totalDistance < minDistance)) {
+            minDistance = totalDistance;
+            localStorage.setItem('ver2_min_dist', minDistance);
+        }
+
+        const rankOrder = { 'S': 5, 'A': 4, 'B': 3, 'C': 2, 'D': 1, '---': 0 };
+        if (rankOrder[rank] > rankOrder[bestRank]) {
+            bestRank = rank;
+            localStorage.setItem('ver2_best_rank', bestRank);
+        }
+        updateRecordsUI();
+
+        if (isClear) {
+            resultTitle.innerText = 'STAGE CLEAR!';
+            resultTitle.style.background = 'linear-gradient(135deg, #34d399, #60a5fa)';
+            resultTitle.style.webkitBackgroundClip = 'text';
+            resultMsg.innerText = '60秒間を極小の移動で生き残った！';
+        } else {
+            resultTitle.innerText = customReason ? 'ルール違反！（OVER 3s MOVE）' : '動くからそうなる。';
+            resultTitle.style.background = 'linear-gradient(135deg, #ef4444, #f87171)';
+            resultTitle.style.webkitBackgroundClip = 'text';
+            resultMsg.innerText = customReason || '障害物に接触して尊厳が吹き飛んだ...';
+        }
+
+        resultRank.innerText = rank;
+        resultRank.className = 'stat-rank ' + rankClass;
+
+        trophyContainer.innerHTML = trophies.map(t => `<span class="trophy-badge">${t}</span>`).join('');
+
+        resTimeScore.innerText = '+' + liveScore;
+        resNearScore.innerText = '+' + nearMissScoreTotal;
+        resSaveScore.innerText = '+' + saveBonus;
+        resPenalty.innerText = '-' + penalty;
+        resTotalDist.innerText = totalDistance.toFixed(1) + ' px';
+        resFinalScore.innerText = finalScore;
+
+        resultModal.classList.remove('hidden');
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, width, height);
+
+        // 1. シンプルな背景グリッド線
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.lineWidth = 1;
+        const gridSize = 40;
+        for (let x = 0; x < width; x += gridSize) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+        }
+        for (let y = 0; y < height; y += gridSize) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+        }
+
+        // 中央マーカー
+        ctx.strokeStyle = 'rgba(96, 165, 250, 0.2)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(width / 2, height / 2, 25, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 2. 攻撃予告（赤の直線のみ）
+        warnings.forEach(w => {
+            const progress = 1 - (w.timer / w.maxTimer);
+            ctx.save();
+            ctx.strokeStyle = `rgba(239, 68, 68, ${0.4 + progress * 0.6})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 6]);
+            ctx.beginPath();
+            ctx.moveTo(w.sx, w.sy);
+            ctx.lineTo(w.sx + Math.cos(w.angle) * 1200, w.sy + Math.sin(w.angle) * 1200);
+            ctx.stroke();
+            ctx.restore();
+        });
+
+        // 3. 障害物の描画
+        bullets.forEach(b => {
+            ctx.fillStyle = b.color;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.shadowColor = b.color;
+            ctx.shadowBlur = 8;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        // 4. プレイヤーの描画
+        if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+            ctx.fillStyle = continuousMoveTime >= 2.0 ? '#ef4444' : '#60a5fa';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = continuousMoveTime >= 2.0 ? '#fca5a5' : '#93c5fd';
+            ctx.lineWidth = 2;
+            ctx.shadowColor = continuousMoveTime >= 2.0 ? '#ef4444' : '#3b82f6';
+            ctx.shadowBlur = 12;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 5. 浮遊テキスト描画
+        floatingTexts.forEach(ft => {
+            ctx.fillStyle = ft.color;
+            ctx.globalAlpha = ft.alpha;
+            ctx.font = '900 13px sans-serif';
+            ctx.fillText(ft.text, ft.x - 25, ft.y);
+            ctx.globalAlpha = 1.0;
+        });
+
+        requestAnimationFrame(loop);
+    }
+
+    let lastTime = performance.now();
+    function loop(now) {
+        const dt = Math.min(0.1, (now - lastTime) / 1000);
+        lastTime = now;
+
+        update(dt);
+        draw();
+    }
+
+    startBtn.addEventListener('click', startGame);
+    retryBtn.addEventListener('click', startGame);
+    toTitleBtn.addEventListener('click', () => {
+        resultModal.classList.add('hidden');
+        titleModal.classList.remove('hidden');
+        gameState = 'TITLE';
+    });
+    pauseBtn.addEventListener('click', togglePause);
+    resumeBtn.addEventListener('click', togglePause);
+    pauseTitleBtn.addEventListener('click', () => {
+        pauseModal.classList.add('hidden');
+        titleModal.classList.remove('hidden');
+        gameState = 'TITLE';
+    });
+
+    requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
